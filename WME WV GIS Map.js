@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME WV GIS Map
 // @namespace    https://greasyfork.org/users/45389
-// @version      2024.09.30.000
+// @version      2024.09.30.001
 // @description  Open a WV GIS map in another window, at the same location as the WME map.  Keeps the location of the GIS map synced to WME.
 // @author       MapOMatic
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
