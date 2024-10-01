@@ -19,7 +19,9 @@
 (function main() {
     'use strict';
 
-    class SharedCode {
+    class WMECode {
+        static mapWindow;
+
         static getMercatorMapExtent() {
             const wgs84Extent = W.map.getExtent();
             const wgs84LeftBottom = [wgs84Extent[0], wgs84Extent[1]];
@@ -28,13 +30,9 @@
             const mercatorRightTop = turf.toMercator(wgs84RightTop);
             return [mercatorLeftBottom[0], mercatorLeftBottom[1], mercatorRightTop[0], mercatorRightTop[1]];
         }
-    }
-
-    class WMECode extends SharedCode {
-        static mapWindow;
 
         static onButtonClick() {
-            const wazeExt = super.getMercatorMapExtent();
+            const wazeExt = this.getMercatorMapExtent();
             let url = 'http://www.arcgis.com/home/webmap/viewer.html?webmap=6f496afe68024189b54d823e09550ced&extent=';
             url += `${wazeExt[0]}%2C${wazeExt[1]}%2C${wazeExt[2]}%2C${wazeExt[3]}%2C102113`;
             if (!this.mapWindow || this.mapWindow.closed) {
@@ -55,7 +53,7 @@
 
         static postMessage() {
             if (this.mapWindow && !this.mapWindow.closed) {
-                const extent = super.getMercatorMapExtent();
+                const extent = this.getMercatorMapExtent();
                 this.mapWindow.postMessage({
                     type: 'setExtent',
                     xmin: extent[0],
@@ -98,7 +96,7 @@
         }
     }
 
-    class GISMapCode extends SharedCode {
+    class GISMapCode {
         static Extent;
         static SpatialReference;
 
