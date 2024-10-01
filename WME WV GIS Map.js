@@ -1,7 +1,9 @@
+/* eslint-disable max-len */
+/* eslint-disable max-classes-per-file */
 // ==UserScript==
 // @name         WME WV GIS Map
 // @namespace    https://greasyfork.org/users/45389
-// @version      2024.09.30.001
+// @version      2024.10.01.000
 // @description  Open a WV GIS map in another window, at the same location as the WME map.  Keeps the location of the GIS map synced to WME.
 // @author       MapOMatic
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -17,136 +19,131 @@
 (function main() {
     'use strict';
 
-    const debugLevel = 0;
-    let mapWindow;
-    let Extent;
-    let SpatialReference;
-    let receiverAdded = false;
-
-    function log(message, level) {
-        if (message && level <= debugLevel) {
-            console.log('WV GIS:', message);
+    class SharedCode {
+        static getMercatorMapExtent() {
+            const wgs84Extent = W.map.getExtent();
+            const wgs84LeftBottom = [wgs84Extent[0], wgs84Extent[1]];
+            const wgs84RightTop = [wgs84Extent[2], wgs84Extent[3]];
+            const mercatorLeftBottom = turf.toMercator(wgs84LeftBottom);
+            const mercatorRightTop = turf.toMercator(wgs84RightTop);
+            return [mercatorLeftBottom[0], mercatorLeftBottom[1], mercatorRightTop[0], mercatorRightTop[1]];
         }
     }
 
-    function getMercatorMapExtent() {
-        const wgs84Extent = W.map.getExtent();
-        const wgs84LeftBottom = [wgs84Extent[0], wgs84Extent[1]];
-        const wgs84RightTop = [wgs84Extent[2], wgs84Extent[3]];
-        const mercatorLeftBottom = turf.toMercator(wgs84LeftBottom);
-        const mercatorRightTop = turf.toMercator(wgs84RightTop);
-        return [mercatorLeftBottom[0], mercatorLeftBottom[1], mercatorRightTop[0], mercatorRightTop[1]];
-    }
+    class WMECode extends SharedCode {
+        static mapWindow;
 
-    function onButtonClick() {
-        const wazeExt = getMercatorMapExtent();
-        let url = 'http://www.arcgis.com/home/webmap/viewer.html?webmap=6f496afe68024189b54d823e09550ced&extent=';
-        url += `${wazeExt[0]}%2C${wazeExt[1]}%2C${wazeExt[2]}%2C${wazeExt[3]}%2C102113`;
-        if (!mapWindow || mapWindow.closed) {
-            mapWindow = window.open(null, 'wv_gis_map');
-            try {
-                if (mapWindow.location && mapWindow.location.href) {
-                    mapWindow.location.assign(url);
-                }
-            } catch (ex) {
-                if (ex.code === 18) {
-                    // Ignore if accessing location.href is blocked by cross-domain.
-                } else {
-                    throw ex;
+        static onButtonClick() {
+            const wazeExt = super.getMercatorMapExtent();
+            let url = 'http://www.arcgis.com/home/webmap/viewer.html?webmap=6f496afe68024189b54d823e09550ced&extent=';
+            url += `${wazeExt[0]}%2C${wazeExt[1]}%2C${wazeExt[2]}%2C${wazeExt[3]}%2C102113`;
+            if (!this.mapWindow || this.mapWindow.closed) {
+                this.mapWindow = window.open(null, 'wv_gis_map');
+                try {
+                    this.mapWindow.location?.assign(url);
+                } catch (e) {
+                    if (e.code === 18) {
+                        // Ignore if accessing location.href is blocked by cross-domain.
+                    } else {
+                        throw e;
+                    }
                 }
             }
+            this.mapWindow.focus();
+            this.postMessage();
         }
-        mapWindow.focus();
-        syncGISMapExtent(mapWindow);
-    }
 
-    function syncGISMapExtent(myMapWindow) {
-        if (myMapWindow && !myMapWindow.closed) {
-            const wazeExt = getMercatorMapExtent();
-            try {
-                myMapWindow.postMessage({
+        static postMessage() {
+            if (this.mapWindow && !this.mapWindow.closed) {
+                const extent = super.getMercatorMapExtent();
+                this.mapWindow.postMessage({
                     type: 'setExtent',
-                    xmin: wazeExt[0],
-                    xmax: wazeExt[2],
-                    ymin: wazeExt[1],
-                    ymax: wazeExt[3],
-                    spatialReference: 102113
+                    xmin: extent[0],
+                    xmax: extent[2],
+                    ymin: extent[1],
+                    ymax: extent[3]
                 }, 'https://www.arcgis.com');
-            } catch (ex) {
-                log(ex, 0);
+            }
+        }
+
+        static init() {
+            $('.WazeControlPermalink').prepend(
+                $('<div>').css({ float: 'left', display: 'inline-block', padding: '0px 5px 0px 3px' }).append(
+                    $('<div>', { id: 'wv-gis-button', title: 'Open the WV GIS map in a new window' })
+                        .text('WVGIS')
+                        .css({
+                            float: 'left', textDecoration: 'none', color: '#000000', fontWeight: 'bold', cursor: 'pointer'
+                        })
+                        .click(this.onButtonClick.bind(this))
+                )
+            );
+
+            setInterval(() => {
+                const $btn = $('#wv-gis-button');
+                if ($btn.length > 0) {
+                    $btn.css('color', (this.mapWindow && !this.mapWindow.closed) ? '#1e9d12' : '#000000');
+                }
+            }, 500);
+
+            /* Event listeners */
+            W.map.events.register('moveend', null, this.postMessage.bind(this));
+        }
+
+        static bootstrap() {
+            if (typeof W === 'object' && W.userscripts?.state.isReady) {
+                this.init();
+            } else {
+                document.addEventListener('wme-ready', this.init.bind(this), { once: true });
             }
         }
     }
 
-    function init() {
-        $('.WazeControlPermalink').prepend(
-            $('<div>').css({ float: 'left', display: 'inline-block', padding: '0px 5px 0px 3px' }).append(
-                $('<a>', { id: 'wv-gis-button', title: 'Open the WV GIS map in a new window', href: 'javascript:void(0)' })
-                    .text('WVGIS')
-                    .css({
-                        float: 'left', textDecoration: 'none', color: '#000000', fontWeight: 'bold'
-                    })
-                    .click(onButtonClick)
-            )
-        );
+    class GISMapCode extends SharedCode {
+        static Extent;
+        static SpatialReference;
 
-        setInterval(() => {
-            const $btn = $('#wv-gis-button');
-            if ($btn.length > 0) {
-                $btn.css('color', (mapWindow && !mapWindow.closed) ? '#1e9d12' : '#000000');
+        static receiveMessage(message) {
+            const { data } = message;
+            switch (data.type) {
+                case 'setExtent': {
+                    const extent = new this.Extent({
+                        xmin: data.xmin,
+                        xmax: data.xmax,
+                        ymin: data.ymin,
+                        ymax: data.ymax,
+                        spatialReference: new this.SpatialReference({ wkid: 102113 })
+                    });
+                    unsafeWindow.arcgisonline.map.main.map.setExtent(extent);
+                    break;
+                }
+                default:
+                    // Add more types as needed...
             }
-        }, 500);
-
-        /* Event listeners */
-        W.map.events.register('moveend', null, () => { syncGISMapExtent(mapWindow); });
-
-        log('Initialized.', 1);
-    }
-
-    function receiveMessageGIS(event) {
-        log(event, 1);
-        const { data } = event;
-        if (!Extent) {
-            Extent = unsafeWindow.require('esri/geometry/Extent');
-            SpatialReference = unsafeWindow.require('esri/SpatialReference');
-        }
-        switch (data.type) {
-            case 'setExtent':
         }
 
-        const { map } = unsafeWindow.arcgisonline.map.main;
-        const ext = new Extent({
-            xmin: data.xmin, xmax: data.xmax, ymin: data.ymin, ymax: data.ymax, spatialReference: new SpatialReference({ wkid: data.spatialReference })
-        });
-        unsafeWindow.arcgisonline.map.main.map.setExtent(ext);
-    }
+        static init() {
+            window.addEventListener('message', this.receiveMessage.bind(this));
+        }
 
-    function receiveMessageWME(event) {
-        // TBD
+        static bootstrap() {
+            // There may be a more elegant way to check that these modules are ready...
+            try {
+                this.Extent = unsafeWindow.require('esri/geometry/Extent');
+                this.SpatialReference = unsafeWindow.require('esri/SpatialReference');
+                this.init();
+            } catch {
+                setTimeout(this.bootstrap.bind(this), 200);
+            }
+        }
     }
 
     function bootstrap() {
         if (window.location.host.toLowerCase() === 'www.arcgis.com') {
-            window.addEventListener('message', receiveMessageGIS, false);
+            GISMapCode.bootstrap();
         } else {
-            if (!receiverAdded) {
-                window.addEventListener('message', receiveMessageWME, false);
-                receiverAdded = true;
-            }
-            if (W && W.loginManager
-                && W.loginManager.events.register
-                && W.map) {
-                log('Initializing...', 1);
-                init();
-            } else {
-                log('Bootstrap failed. Trying again...', 1);
-                window.setTimeout(() => {
-                    bootstrap();
-                }, 200);
-            }
+            WMECode.bootstrap();
         }
     }
 
-    log('Bootstrap...', 1);
     bootstrap();
 })();
