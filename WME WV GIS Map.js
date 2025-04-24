@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         WME WV GIS Map
 // @namespace    https://greasyfork.org/users/45389
-// @version      2024.10.01.001
+// @version      2025.04.24.000
 // @description  Open a WV GIS map in another window, at the same location as the WME map.  Keeps the location of the GIS map synced to WME.
 // @author       MapOMatic
 // @include     /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -90,8 +90,7 @@
                 }
             }, 500);
 
-            // SDK: Need to replace this with a moveend event.
-            this.sdk.Events.on('wme-map-move', this.postMessage.bind(this));
+            this.sdk.Events.on({ eventName: 'wme-map-move-end', eventHandler: this.postMessage.bind(this) });
         }
     }
 
